@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/rrochlin/WebServerGo/internal/auth"
 	"github.com/rrochlin/WebServerGo/internal/database"
 )
 
@@ -92,7 +93,8 @@ func (cfg *apiConfig) HandlerChirps(w http.ResponseWriter, req *http.Request) {
 
 func (cfg *apiConfig) HandlerUsers(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
@@ -101,7 +103,16 @@ func (cfg *apiConfig) HandlerUsers(w http.ResponseWriter, req *http.Request) {
 		ErrorBadRequest("failed to parse request body", w)
 		return
 	}
-	user, err := cfg.db.query.CreateUser(req.Context(), params.Email)
+	hashedPass, err := auth.HashPassword(params.Password)
+	if err != nil {
+		ErrorServer(fmt.Sprintf("Passowrd hash failed: %v", err), w)
+		return
+	}
+
+	user, err := cfg.db.query.CreateUser(req.Context(), database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPass,
+	})
 	if err != nil {
 		ErrorServer(fmt.Sprintf("Could not create user: %v", err), w)
 		return
@@ -152,4 +163,51 @@ func (cfg *apiConfig) HandlerGetChirp(w http.ResponseWriter, req *http.Request) 
 	w.WriteHeader(200)
 	w.Write(dat)
 
+}
+
+func (cfg *apiConfig) HandlerLogin(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		ErrorBadRequest("failed to parse request body", w)
+		return
+	}
+
+	user, err := cfg.db.query.GetUser(req.Context(), params.Email)
+	if err != nil {
+		ErrorNotFound(fmt.Sprintf("%v", err), w)
+		return
+	}
+	err = auth.CheckPasswordHash(user.HashedPassword, params.Password)
+	if err != nil {
+		ErrorUnauthorized("Incorrect Password", w)
+		return
+	}
+	dat, err := json.Marshal(toPublicUser(user))
+	if err != nil {
+		ErrorServer(fmt.Sprintf("failed to user for response %v", err), w)
+		return
+	}
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(dat)
+
+}
+
+type PublicUser struct {
+	ID    uuid.UUID `json:"id"`
+	Email string    `json:"email"`
+}
+
+// toPublicUser converts a User to a PublicUser, excluding sensitive fields
+func toPublicUser(user database.User) PublicUser {
+	return PublicUser{
+		ID:    user.ID,
+		Email: user.Email,
+	}
 }

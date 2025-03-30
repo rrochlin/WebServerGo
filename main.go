@@ -44,6 +44,7 @@ func main() {
 	mux.HandleFunc("POST /api/users", cfg.HandlerUsers)
 	mux.HandleFunc("GET /api/chirps", cfg.HandlerGetChirps)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.HandlerGetChirp)
+	mux.HandleFunc("POST /api/login", cfg.HandlerLogin)
 
 	var server = http.Server{
 		Addr:    fmt.Sprintf("%v:8080", cfg.api.host),
