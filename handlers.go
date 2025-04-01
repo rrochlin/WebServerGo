@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rrochlin/WebServerGo/internal/auth"
@@ -43,12 +44,23 @@ func (cfg *apiConfig) HandlerReset(w http.ResponseWriter, req *http.Request) {
 
 func (cfg *apiConfig) HandlerChirps(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
+
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		ErrorUnauthorized(err.Error(), w)
+		return
+	}
+	uuid, err := auth.ValidateJWT(token, cfg.api.secret)
+	if err != nil {
+		ErrorUnauthorized(err.Error(), w)
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		ErrorBadRequest("failed to parse request body", w)
 		return
@@ -73,7 +85,7 @@ func (cfg *apiConfig) HandlerChirps(w http.ResponseWriter, req *http.Request) {
 		req.Context(),
 		database.CreateChirpParams{
 			Body:   cleanedBody,
-			UserID: params.UserID,
+			UserID: uuid,
 		},
 	)
 	if err != nil {
@@ -169,6 +181,7 @@ func (cfg *apiConfig) HandlerLogin(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Expires  *int   `json:"expires_in_seconds,omitempty"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
@@ -188,11 +201,29 @@ func (cfg *apiConfig) HandlerLogin(w http.ResponseWriter, req *http.Request) {
 		ErrorUnauthorized("Incorrect Password", w)
 		return
 	}
-	dat, err := json.Marshal(toPublicUser(user))
+	var expirey time.Duration
+	if params.Expires == nil {
+		expirey, _ = time.ParseDuration("1h")
+	} else {
+		expirey, err = time.ParseDuration(fmt.Sprintf("%vs", *params.Expires))
+		if err != nil {
+			ErrorServer(fmt.Sprintf("failed to parse time duration: %v", err), w)
+			return
+		}
+	}
+
+	token, err := auth.MakeJWT(user.ID, cfg.api.secret, expirey)
+	if err != nil {
+		ErrorServer(fmt.Sprintf("failed to construct JWT %v", err), w)
+		return
+	}
+
+	dat, err := json.Marshal(toPublicUser(user, token))
 	if err != nil {
 		ErrorServer(fmt.Sprintf("failed to user for response %v", err), w)
 		return
 	}
+
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(200)
 	w.Write(dat)
@@ -200,14 +231,19 @@ func (cfg *apiConfig) HandlerLogin(w http.ResponseWriter, req *http.Request) {
 }
 
 type PublicUser struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
-// toPublicUser converts a User to a PublicUser, excluding sensitive fields
-func toPublicUser(user database.User) PublicUser {
+func toPublicUser(user database.User, token string) PublicUser {
 	return PublicUser{
-		ID:    user.ID,
-		Email: user.Email,
+		ID:        user.ID,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Token:     token,
 	}
 }

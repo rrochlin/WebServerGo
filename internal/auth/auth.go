@@ -1,0 +1,86 @@
+package auth
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+)
+
+func HashPassword(password string) (string, error) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), 4)
+	if err != nil {
+		return "", err
+	}
+	return string(hashed), err
+}
+
+func CheckPasswordHash(hash, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+}
+
+func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
+	JWT := jwt.NewWithClaims(
+		jwt.SigningMethodHS256,
+		jwt.RegisteredClaims{
+			Issuer:    "chirpy",
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
+			Subject:   userID.String(),
+		})
+	signature, err := JWT.SignedString([]byte(tokenSecret))
+	if err != nil {
+		return "", err
+	}
+	return signature, nil
+}
+
+func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
+	claimsStruct := jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&claimsStruct,
+		func(t *jwt.Token) (any, error) {
+			return []byte(tokenSecret), nil
+		})
+	if err != nil {
+		fmt.Println("error parsing jwt")
+		return uuid.UUID{}, err
+	}
+	id, err := token.Claims.GetSubject()
+	if err != nil {
+		fmt.Println("error retrieving claims")
+		return uuid.UUID{}, err
+	}
+
+	issuer, err := token.Claims.GetIssuer()
+	if err != nil {
+		fmt.Println("error retrieving claims")
+		return uuid.UUID{}, err
+	}
+	if issuer != string("chirpy") {
+		return uuid.UUID{}, fmt.Errorf("invalid issuer")
+	}
+
+	parsedId, err := uuid.Parse(id)
+	if err != nil {
+		fmt.Println("error parsing uuid")
+		return uuid.UUID{}, err
+	}
+
+	return parsedId, nil
+
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	auth := headers.Get("Authorization")
+	if auth == "" {
+		fmt.Println("auth header missing")
+		return "", fmt.Errorf("auth header missing")
+	}
+	return strings.TrimPrefix(auth, "Bearer "), nil
+}
