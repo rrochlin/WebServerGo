@@ -13,7 +13,27 @@ import (
 )
 
 func (cfg *apiConfig) HandlerGetChirps(w http.ResponseWriter, req *http.Request) {
-	chirps, err := cfg.db.query.GetAllChirps(req.Context())
+	s := req.URL.Query().Get("author_id")
+	var chirps []database.Chirp
+	var err error
+
+	if s == "" {
+		chirps, err = cfg.db.query.GetAllChirps(req.Context())
+	} else {
+		authorId, err := uuid.Parse(s)
+		if err != nil {
+			ErrorBadRequest(err.Error(), w)
+			return
+		}
+		chirps, err = cfg.db.query.GetAuthorsChirps(req.Context(), authorId)
+	}
+	sort := req.URL.Query().Get("sort")
+	if sort == "desc" {
+		slices.SortFunc(chirps, func(a, b database.Chirp) int {
+			return a.CreatedAt.Compare(b.CreatedAt) * -1
+		})
+	}
+
 	if err != nil {
 		ErrorServer(fmt.Sprintf("could not fetch chrips: %v", err), w)
 		return
@@ -50,7 +70,7 @@ func (cfg *apiConfig) HandlerGetChirp(w http.ResponseWriter, req *http.Request) 
 
 }
 
-func (cfg *apiConfig) HandlerChirps(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) HandlerPostChirp(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
 		Body string `json:"body"`
 	}
