@@ -71,6 +71,7 @@ type PublicUser struct {
 	Email        string    `json:"email"`
 	Token        string    `json:"token,omitempty"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
+	Red          bool      `json:"is_chirpy_red"`
 }
 
 func toPublicUser(user database.User, token, refresh_token string) PublicUser {
@@ -81,5 +82,6 @@ func toPublicUser(user database.User, token, refresh_token string) PublicUser {
 		UpdatedAt:    user.UpdatedAt,
 		Token:        token,
 		RefreshToken: refresh_token,
+		Red:          user.IsChirpyRed,
 	}
 }

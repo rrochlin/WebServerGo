@@ -48,6 +48,8 @@ func main() {
 	mux.HandleFunc("POST /api/refresh", cfg.HandlerRefresh)
 	mux.HandleFunc("POST /api/revoke", cfg.HandlerRevoke)
 	mux.HandleFunc("PUT /api/users", cfg.HandlerUpdateUser)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", cfg.HandlerDeleteChirp)
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.HandlerUpgradeUser)
 
 	var server = http.Server{
 		Addr:    fmt.Sprintf("%v:8080", cfg.api.host),

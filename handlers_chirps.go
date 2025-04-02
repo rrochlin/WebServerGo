@@ -110,3 +110,40 @@ func (cfg *apiConfig) HandlerChirps(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(201)
 	w.Write(dat)
 }
+
+func (cfg *apiConfig) HandlerDeleteChirp(w http.ResponseWriter, req *http.Request) {
+	unverifiedToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		ErrorUnauthorized(err.Error(), w)
+		return
+	}
+	userid, err := auth.ValidateJWT(unverifiedToken, cfg.api.secret)
+	if err != nil {
+		ErrorForbidden(err.Error(), w)
+		return
+	}
+
+	chirpID, err := uuid.Parse(req.PathValue("chirpID"))
+	if err != nil {
+		ErrorBadRequest(fmt.Sprintf("Chirp ID not valid UUID: %v", err), w)
+	}
+
+	chirp, err := cfg.db.query.GetChirp(req.Context(), chirpID)
+	if err != nil {
+		ErrorNotFound(err.Error(), w)
+		return
+	}
+
+	if chirp.UserID != userid {
+		ErrorForbidden("userid does not match chirp owner", w)
+		return
+	}
+
+	err = cfg.db.query.DeleteChirp(req.Context(), chirp.ID)
+	if err != nil {
+		ErrorServer(err.Error(), w)
+		return
+	}
+
+	w.WriteHeader(204)
+}
