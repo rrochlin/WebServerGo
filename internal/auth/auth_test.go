@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -40,7 +39,7 @@ func TestJWT(t *testing.T) {
 		return
 	}
 
-	_, err = MakeJWT(uuid.New(), secret.X.String(), time.Duration(0))
+	_, err = MakeJWT(uuid.New(), secret.X.String())
 	if err != nil {
 		t.Errorf(fmt.Sprintf("could not make JWT %v", err))
 		return
@@ -54,8 +53,7 @@ func TestJWTValidate(t *testing.T) {
 		t.Errorf(fmt.Sprintf("Could not generate key secret %v", err))
 		return
 	}
-	dur, _ := time.ParseDuration("10s")
-	token, err := MakeJWT(user, secret.X.String(), dur)
+	token, err := MakeJWT(user, secret.X.String())
 	if err != nil {
 		t.Errorf(fmt.Sprintf("could not make JWT %v", err))
 		return

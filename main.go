@@ -45,6 +45,9 @@ func main() {
 	mux.HandleFunc("GET /api/chirps", cfg.HandlerGetChirps)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.HandlerGetChirp)
 	mux.HandleFunc("POST /api/login", cfg.HandlerLogin)
+	mux.HandleFunc("POST /api/refresh", cfg.HandlerRefresh)
+	mux.HandleFunc("POST /api/revoke", cfg.HandlerRevoke)
+	mux.HandleFunc("PUT /api/users", cfg.HandlerUpdateUser)
 
 	var server = http.Server{
 		Addr:    fmt.Sprintf("%v:8080", cfg.api.host),
